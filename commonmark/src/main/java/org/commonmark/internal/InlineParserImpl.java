@@ -7,6 +7,7 @@ import org.commonmark.internal.util.Html5Entities;
 import org.commonmark.internal.util.Parsing;
 import org.commonmark.node.*;
 import org.commonmark.parser.DelimiterProcessor;
+import org.commonmark.parser.Options;
 import org.commonmark.parser.InlineParser;
 
 import java.util.*;
@@ -166,13 +167,15 @@ public class InlineParserImpl implements InlineParser {
      *
      * @return how many characters were parsed as a reference, {@code 0} if none
      */
-    public int parseReference(String s) {
+    public int parseReference(String s, Options options) {
+        //System.out.println("parseReference: " + s);
         this.subject = s;
         this.pos = 0;
         String rawLabel;
         String dest;
         String title;
         int matchChars;
+        //boolean isReference = false;
         int startPos = this.pos;
 
         // label:
@@ -185,6 +188,7 @@ public class InlineParserImpl implements InlineParser {
 
         // colon:
         if (this.peek() == ':') {
+            //isReference = true;
             this.pos++;
         } else {
             this.pos = startPos;
@@ -237,8 +241,20 @@ public class InlineParserImpl implements InlineParser {
 
         if (!referenceMap.containsKey(normalizedLabel)) {
             Link link = new Link(dest, title);
+            link.setLabel(normalizedLabel);
             referenceMap.put(normalizedLabel, link);
+            //System.out.println("Created Reference: " + link);
         }
+        //System.out.println("parseReference, matched #" + (this.pos - startPos));
+
+        // if we want to preserve references, trick the caller into
+        // thinking nothing was matched, even though it was. Parsing
+        // linkReferences then gets delegated to later callers.
+
+        if (options.preserveLinkReferences) {
+            return 0;
+        }
+
         return this.pos - startPos;
     }
 
@@ -530,6 +546,8 @@ public class InlineParserImpl implements InlineParser {
         this.pos += 1;
         int startPos = this.pos;
 
+        //System.out.println("parseCloseBracket: peek() == " + this.peek());
+
         boolean containsBracket = false;
         // look through stack of delimiters for a [ or ![
         Delimiter opener = this.delimiter;
@@ -564,6 +582,7 @@ public class InlineParserImpl implements InlineParser {
         String dest = null;
         String title = null;
         boolean isLinkOrImage = false;
+        Linkable reference = null;
 
         // Inline link?
         if (this.peek() == '(') {
@@ -603,6 +622,7 @@ public class InlineParserImpl implements InlineParser {
             if (ref != null) {
                 Link link = referenceMap.get(Escaping.normalizeReference(ref));
                 if (link != null) {
+                    reference = link;
                     dest = link.getDestination();
                     title = link.getTitle();
                     isLinkOrImage = true;
@@ -613,7 +633,9 @@ public class InlineParserImpl implements InlineParser {
         if (isLinkOrImage) {
             // If we got here, open is a potential opener
             boolean isImage = opener.delimiterChar == '!';
-            Node linkOrImage = isImage ? new Image(dest, title) : new Link(dest, title);
+            //System.out.println("Creating Link: " + dest);
+            Linkable linkOrImage = isImage ? new Image(dest, title) : new Link(dest, title);
+            linkOrImage.setReference(reference);
 
             // Flush text now. We don't need to worry about combining it with adjacent text nodes, as we'll wrap it in a
             // link or image node.
@@ -705,13 +727,13 @@ public class InlineParserImpl implements InlineParser {
         String m;
         if ((m = this.match(EMAIL_AUTOLINK)) != null) {
             String dest = m.substring(1, m.length() - 1);
-            Link node = new Link("mailto:" + dest, null);
+            Link node = new AutoLink("mailto:" + dest, null);
             node.appendChild(new Text(dest));
             appendNode(node);
             return true;
         } else if ((m = this.match(AUTOLINK)) != null) {
             String dest = m.substring(1, m.length() - 1);
-            Link node = new Link(dest, null);
+            Link node = new AutoLink(dest, null);
             node.appendChild(new Text(dest));
             appendNode(node);
             return true;

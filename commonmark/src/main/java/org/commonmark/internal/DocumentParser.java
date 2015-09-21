@@ -6,6 +6,7 @@ import java.io.Reader;
 import org.commonmark.internal.util.Parsing;
 import org.commonmark.internal.util.Substring;
 import org.commonmark.node.*;
+import org.commonmark.parser.Options;
 import org.commonmark.parser.block.*;
 
 import java.util.*;
@@ -42,15 +43,17 @@ public class DocumentParser implements ParserState {
     private final List<BlockParserFactory> blockParserFactories;
     private final InlineParserImpl inlineParser;
     private final DocumentBlockParser documentBlockParser;
+    private final Options options;
 
     private List<BlockParser> activeBlockParsers = new ArrayList<>();
     private Set<BlockParser> allBlockParsers = new HashSet<>();
     private Map<Node, Boolean> lastLineBlank = new HashMap<>();
 
-    public DocumentParser(List<BlockParserFactory> blockParserFactories, InlineParserImpl inlineParser) {
+    public DocumentParser(List<BlockParserFactory> blockParserFactories, InlineParserImpl inlineParser, Options options) {
         this.blockParserFactories = blockParserFactories;
         this.inlineParser = inlineParser;
-        
+        this.options = options;
+
         this.documentBlockParser = new DocumentBlockParser();
         activateBlockParser(this.documentBlockParser);
     }
@@ -66,6 +69,7 @@ public class DocumentParser implements ParserState {
      * The main parsing function. Returns a parsed document AST.
      */
     public Document parse(String input) {
+        //Util.log("DocumentParser.parse<String>", input);
         int lineStart = 0;
         int lineBreak;
         while ((lineBreak = Parsing.findLineBreak(input, lineStart)) != -1) {
@@ -81,9 +85,11 @@ public class DocumentParser implements ParserState {
             incorporateLine(Substring.of(input, lineStart, input.length()));
         }
 
+        //Util.log("DocumentParser.parse<String>", "== FINALIZE & PROCESS =======================================================");
+
         return finalizeAndProcess();
     }
-    
+
     public Document parse(Reader input) throws IOException {
         BufferedReader bufferedReader;
         if (input instanceof BufferedReader) {
@@ -91,7 +97,7 @@ public class DocumentParser implements ParserState {
         } else {
             bufferedReader = new BufferedReader(input);
         }
-        
+
         String line;
         while ((line = bufferedReader.readLine()) != null) {
             incorporateLine(line);
@@ -140,7 +146,9 @@ public class DocumentParser implements ParserState {
      * line of input, then finalizing the document.
      */
     private void incorporateLine(CharSequence ln) {
+        //Util.log("line", ln);
         line = Parsing.prepareLine(ln);
+        //Util.log("line", ln);
         index = 0;
         column = 0;
         nextNonSpace = 0;
@@ -152,6 +160,7 @@ public class DocumentParser implements ParserState {
         // The document will always match, can be skipped
         int matches = 1;
         for (BlockParser blockParser : activeBlockParsers.subList(1, activeBlockParsers.size())) {
+            //Util.log("trying blockparser", blockParser);
             findNextNonSpace();
 
             BlockContinue result = blockParser.tryContinue(this);
@@ -326,6 +335,7 @@ public class DocumentParser implements ParserState {
      * definitions.
      */
     private void finalize(BlockParser blockParser) {
+        //Util.log("DocumentParser.finalize<BlockParser>", blockParser);
         if (getActiveBlockParser() == blockParser) {
             deactivateBlockParser();
         }
@@ -334,7 +344,7 @@ public class DocumentParser implements ParserState {
 
         if (blockParser instanceof ParagraphParser) {
             ParagraphParser paragraphParser = (ParagraphParser) blockParser;
-            paragraphParser.closeBlock(inlineParser);
+            paragraphParser.closeBlock(inlineParser, options);
         } else if (blockParser instanceof ListBlockParser) {
             ListBlockParser listBlockParser = (ListBlockParser) blockParser;
             finalizeListTight(listBlockParser);
@@ -491,11 +501,14 @@ public class DocumentParser implements ParserState {
     }
 
     private Document finalizeAndProcess() {
+        //Util.log("DocumentParser.finalizeAndProcess", "=== FINALIZING BLOCKS ===");
+
         finalizeBlocks(this.activeBlockParsers);
+        //Util.log("DocumentParser.finalizeAndProcess", "=== PROCESSING INLINES ===");
         this.processInlines();
         return this.documentBlockParser.getBlock();
     }
-    
+
     private static class MatchedBlockParserImpl implements MatchedBlockParser {
 
         private final BlockParser matchedBlockParser;

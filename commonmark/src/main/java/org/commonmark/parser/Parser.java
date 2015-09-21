@@ -20,6 +20,7 @@ public class Parser {
     private final BitSet delimiterCharacters;
     private final BitSet specialCharacters;
     private final List<PostProcessor> postProcessors;
+    private final Options options;
 
     private Parser(Builder builder) {
         this.blockParserFactories = DocumentParser.calculateBlockParserFactories(builder.blockParserFactories);
@@ -27,6 +28,7 @@ public class Parser {
         this.delimiterCharacters = InlineParserImpl.calculateDelimiterCharacters(delimiterProcessors.keySet());
         this.specialCharacters = InlineParserImpl.calculateSpecialCharacters(delimiterCharacters);
         this.postProcessors = builder.postProcessors;
+        this.options = builder.options;
     }
 
     public static Builder builder() {
@@ -43,14 +45,14 @@ public class Parser {
      */
     public Node parse(String input) {
         InlineParserImpl inlineParser = new InlineParserImpl(specialCharacters, delimiterCharacters, delimiterProcessors);
-        DocumentParser documentParser = new DocumentParser(blockParserFactories, inlineParser);
+        DocumentParser documentParser = new DocumentParser(blockParserFactories, inlineParser, options);
         Node document = documentParser.parse(input);
         return postProcess(document);
     }
-    
+
     public Node parseReader(Reader input) throws IOException {
         InlineParserImpl inlineParser = new InlineParserImpl(specialCharacters, delimiterCharacters, delimiterProcessors);
-        DocumentParser documentParser = new DocumentParser(blockParserFactories, inlineParser);
+        DocumentParser documentParser = new DocumentParser(blockParserFactories, inlineParser, options);
         Node document = documentParser.parse(input);
         return postProcess(document);
     }
@@ -61,14 +63,26 @@ public class Parser {
         }
         return document;
     }
-    
+
     public static class Builder {
         private final List<BlockParserFactory> blockParserFactories = new ArrayList<>();
         private final List<DelimiterProcessor> delimiterProcessors = new ArrayList<>();
         private final List<PostProcessor> postProcessors = new ArrayList<>();
 
+        private Options options;
+        private boolean preserveLinkReferences;
+
         public Parser build() {
+            buildOptions();
             return new Parser(this);
+        }
+
+        private void buildOptions() {
+            this.options = new Options(preserveLinkReferences);
+        }
+
+        public void setPreserveLinkReferences(boolean preserveLinkReferences) {
+            this.preserveLinkReferences = preserveLinkReferences;
         }
 
         /**

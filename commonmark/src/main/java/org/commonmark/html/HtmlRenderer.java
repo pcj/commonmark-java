@@ -246,6 +246,11 @@ public class HtmlRenderer {
         }
 
         @Override
+        public void visit(AutoLink link) {
+            visit((Link)link);
+        }
+
+        @Override
         public void visit(ListItem listItem) {
             html.tag("li", getAttrs(listItem));
             visitChildren(listItem);
