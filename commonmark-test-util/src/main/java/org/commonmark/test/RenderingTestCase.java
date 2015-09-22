@@ -12,6 +12,12 @@ public abstract class RenderingTestCase {
         // include source for better assertion errors
         String expected = showTabs(expectedHtml + "\n\n" + source);
         String actual = showTabs(html + "\n\n" + source);
+
+        if (!expected.equals(actual)) {
+            System.out.println("expected: " + expected);
+            System.out.println("actual: " + actual);
+        }
+
         assertEquals(expected, actual);
     }
 
